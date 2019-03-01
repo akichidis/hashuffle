@@ -22,8 +22,6 @@ open class BitcoinDrawContract : Contract {
     }
 
     override fun verify(tx: LedgerTransaction) {
-        val logger = loggerFor<BitcoinDrawContract>()
-
         val inputDrawStates = tx.inputsOfType<BitcoinDrawState>()
         val outputDrawStates = tx.outputsOfType<BitcoinDrawState>()
         val command = tx.commands.requireSingleCommand<BitcoinDrawContract.Commands>()
@@ -46,7 +44,7 @@ open class BitcoinDrawContract : Contract {
 
             is Commands.PerformDraw -> {
                 val performDrawCommand = command.value as Commands.PerformDraw
-                val drawState = outputDrawStates.first()
+                val drawState = inputDrawStates.first()
 
                 val numOfBlocksToProvide = drawState.drawBlockHeight + drawState.numberOfBlocksForVerification -
                         drawState.currentBlock.blockHeight
@@ -56,7 +54,7 @@ open class BitcoinDrawContract : Contract {
 
                     val providedBitcoinBlocks = deserialiseBlockchainBlocks(performDrawCommand.blockListForDraw)
 
-                    "Blockchain is invalid" using isBlockchainValid(drawState.currentBlock.hash, providedBitcoinBlocks)
+                    "Blockchain is invalid" using isBlockchainValid(drawState.currentBlock.hash, drawState.currentBlock.currentBlockDifficulty, providedBitcoinBlocks)
 
                     // Find the block to use for the draw
                     val drawBlockIndex = drawState.drawBlockHeight - drawState.currentBlock.blockHeight - 1
@@ -98,7 +96,7 @@ open class BitcoinDrawContract : Contract {
      * Traverses the provided blocks and verifies the whole block chain having as
      * initial reference the provided starting block hash.
      */
-    private fun isBlockchainValid(startingBlockHash: String, blockListForDraw: List<Block>): Boolean {
+    private fun isBlockchainValid(startingBlockHash: String, difficulty: Long, blockListForDraw: List<Block>): Boolean {
         val logger = loggerFor<BitcoinDrawContract>()
 
         // initialise BitcoinJ
@@ -113,6 +111,11 @@ open class BitcoinDrawContract : Contract {
             }
 
             logger.info("Validated block with id " + block.hashAsString)
+
+            if (block.difficultyTarget != difficulty) {
+                logger.error("Difficulty is not the expected one: " + block.difficultyTarget + " " + difficulty)
+                return false
+            }
 
             // verify that it points correctly to the previous hash
             if (previousBlockHash != block.prevBlockHash.toString()) {
