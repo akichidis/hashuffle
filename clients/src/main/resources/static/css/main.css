@@ -1,0 +1,32 @@
+label.center, div.center {
+    width: 100%;
+    text-align: center;
+}
+
+img.logo {
+    width: 40px;
+    padding: 5px;
+    float: left;
+}
+
+#chessBoard {
+    display: table-cell;
+    width: 400px;
+    margin:auto
+}
+
+body {
+    background-image: url('../img/background.png');
+}
+
+#signaturesPanel {
+    height: 150px;
+}
+
+#gameLoader {
+    width: 40px;
+}
+
+#movePopupText {
+    word-break: break-all;
+}

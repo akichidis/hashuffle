@@ -1,0 +1,21 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="Run Integration Tests" type="JUnit" factoryName="JUnit">
+    <module name="com.lightningchess.cordapp.integrationTest" />
+    <extension name="coverage">
+      <pattern>
+        <option name="PATTERN" value="com.hashuffle.*" />
+        <option name="ENABLED" value="true" />
+      </pattern>
+    </extension>
+    <option name="PACKAGE_NAME" value="com.hashuffle" />
+    <option name="MAIN_CLASS_NAME" value="com.hashuffle.DriverBasedTest" />
+    <option name="METHOD_NAME" value="node test" />
+    <option name="TEST_OBJECT" value="class" />
+    <option name="VM_PARAMETERS" value="-ea -javaagent:lib/quasar.jar" />
+    <option name="PARAMETERS" value="" />
+    <option name="WORKING_DIRECTORY" value="file://$PROJECT_DIR$" />
+    <method v="2">
+      <option name="Make" enabled="true" />
+    </method>
+  </configuration>
+</component>
