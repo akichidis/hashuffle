@@ -1,8 +1,13 @@
 package com.hashuffle.state
 
-import net.corda.core.contracts.ContractState
+import com.hashuffle.schema.BitcoinDrawSchemaV1
+import net.corda.core.contracts.LinearState
+import net.corda.core.contracts.UniqueIdentifier
 import net.corda.core.identity.AbstractParty
 import net.corda.core.identity.Party
+import net.corda.core.schemas.MappedSchema
+import net.corda.core.schemas.PersistentState
+import net.corda.core.schemas.QueryableState
 import net.corda.core.serialization.CordaSerializable
 
 data class BitcoinDrawState(// the current bitcoin block which is used as referrence
@@ -18,7 +23,9 @@ data class BitcoinDrawState(// the current bitcoin block which is used as referr
                             // is not an orphan one.
                             val numberOfBlocksForVerification: Int,
 
-                            val drawParticipants: List<Participant>): ContractState {
+                            val drawParticipants: MutableList<Participant>,
+
+                            override val linearId: UniqueIdentifier = UniqueIdentifier()): LinearState, QueryableState {
 
     override val participants: List<AbstractParty> get() = drawParticipants.map { p -> p.party }
 
@@ -39,5 +46,33 @@ data class BitcoinDrawState(// the current bitcoin block which is used as referr
                             // difficulty is adjusted in the meanwhile)
                             val currentBlockDifficulty: Long) {
 
+        companion object {
+            val EMPTY_BLOCK = BitcoinBlock("", 0, 0)
+        }
+
     }
+
+    override fun generateMappedObject(schema: MappedSchema): PersistentState {
+        return when (schema) {
+            is BitcoinDrawSchemaV1 -> {
+                val participants = drawParticipants
+                        .map { p -> BitcoinDrawSchemaV1.Participant(null, p.party, p.ticketId) }
+                        .toMutableList()
+
+                BitcoinDrawSchemaV1.PersistentDraw(
+                        currentBlock.hash,
+                        currentBlock.blockHeight,
+                        currentBlock.currentBlockDifficulty,
+                        drawBlockHeight,
+                        participants,
+                        numberOfBlocksForVerification,
+                        this.linearId.id
+                )
+            }
+            else -> throw IllegalArgumentException("Unrecognised schema $schema")
+        }
+    }
+
+    override fun supportedSchemas(): Iterable<MappedSchema> = listOf(BitcoinDrawSchemaV1)
+
 }
