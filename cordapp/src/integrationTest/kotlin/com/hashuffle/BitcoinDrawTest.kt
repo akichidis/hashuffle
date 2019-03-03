@@ -4,6 +4,7 @@ import com.hashuffle.flow.PerformDrawFlow
 import com.hashuffle.flow.SetupBitcoinDrawFlow
 import com.hashuffle.state.BitcoinDrawState
 import net.corda.client.rpc.CordaRPCClient
+import net.corda.core.contracts.TransactionVerificationException
 import net.corda.core.identity.CordaX500Name
 import net.corda.core.messaging.CordaRPCOps
 import net.corda.core.messaging.startFlow
@@ -18,11 +19,11 @@ import net.corda.testing.driver.driver
 import net.corda.testing.node.User
 import org.junit.Ignore
 import org.junit.Test
-import java.io.File
 import java.util.concurrent.Future
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
-import kotlin.test.assertNull
+import kotlin.test.fail
+
 
 class BitcoinDrawTest {
     private val rpcUsers = listOf(User("test", "test", permissions = setOf("ALL")))
@@ -123,19 +124,22 @@ class BitcoinDrawTest {
 
         assertNotNull(drawStateB)
 
-        // WHEN the partyB performs the draw based on the provided Bitcoin blocks
+        // WHEN partyB performs the draw based on the provided Bitcoin blocks they should be able
+        // to spend the transaction. Based on the winning block hash, partyB should be the winner (deterministically defined)
         val winningBlockBytes_564947 = this::class.java.classLoader.getResource("blocks_564947.dat").readBytes()
         val winningBlockBytes_564948 = this::class.java.classLoader.getResource("blocks_564948.dat").readBytes()
 
         // populate the list of blocks
         val blocks = mutableListOf(winningBlockBytes_564947, winningBlockBytes_564948)
 
-        // AND the first party can't spend the transaction
-        var drawTransaction = partyAProxy.startFlow(PerformDrawFlow::Draw, drawStateId, blocks).returnValue.getOrThrow()
+        // AND the first party can't spend the transaction because is not the winner
+        try {
+            val drawTransaction = partyAProxy.startFlow(PerformDrawFlow::Draw, drawStateId, blocks).returnValue.getOrThrow()
+            fail("Party A shouldn't be able to spend the winning state, but they did")
+        } catch (ex: TransactionVerificationException) {
+        }
 
-        assertNull(drawTransaction)
-
-        drawTransaction = partyBProxy.startFlow(PerformDrawFlow::Draw, drawStateId, blocks).returnValue.getOrThrow()
+        val drawTransaction = partyBProxy.startFlow(PerformDrawFlow::Draw, drawStateId, blocks).returnValue.getOrThrow()
 
         // THEN it should be the winner and the transaction should pass
         assertNotNull(drawTransaction)
