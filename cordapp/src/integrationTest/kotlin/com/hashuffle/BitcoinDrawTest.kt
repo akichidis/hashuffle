@@ -17,9 +17,16 @@ import net.corda.testing.driver.DriverParameters
 import net.corda.testing.driver.NodeHandle
 import net.corda.testing.driver.driver
 import net.corda.testing.node.User
+import org.bitcoinj.core.BitcoinSerializer
+import org.bitcoinj.core.Block
+import org.bitcoinj.core.Context
+import org.bitcoinj.params.MainNetParams
 import org.junit.Ignore
 import org.junit.Test
+import java.nio.ByteBuffer
 import java.util.concurrent.Future
+import java.util.stream.IntStream
+import kotlin.streams.toList
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.fail
@@ -52,11 +59,11 @@ class BitcoinDrawTest {
         val partyBProxy: CordaRPCOps = newRPCProxy(nodeB)
 
         // The flow parameters
-        val currentBitcoinBlock = BitcoinDrawState.BitcoinBlock("00000000000000000009100c3b97060ecaec44d843285f115b0d784502bf4d90",
-                564946, 6071846049920)
+        val currentBitcoinBlock = BitcoinDrawState.BitcoinBlock("0000000000000000002214f7766f846fedd7a8f5bb7c3d65d15f13158fe907f0",
+                564939, 388914000)
 
-        val drawBlockHeight = 564947
-        val blocksForVerification = 1
+        val drawBlockHeight = 564942
+        val blocksForVerification = 6
 
         // The partyA setups a draw
         val pairResult = partyAProxy.startFlow(SetupBitcoinDrawFlow::Setup,
@@ -85,7 +92,24 @@ class BitcoinDrawTest {
     }
 
     @Test
-    fun `should successfully setup and perform a draw` () = withDriver {
+    fun `should successfully setup and perform a draw - only winner can spend the draw state` () = withDriver {
+        /*
+            The setup is the following:
+
+            partyA ticket ID = 0
+            partyB ticket ID = 1
+
+            draw block hash = 000000000000000000133629449fa3c77646df4694a5dd26a165a1719999f88b
+
+            partyATicket + hash = 0 + 0000000000000000000133629449fa3c77646df4694a5dd26a165a1719999f88b = 00000000000000000000133629449fa3c77646df4694a5dd26a165a1719999f88b
+            partyBTicket + hash = 1 + 0000000000000000000133629449fa3c77646df4694a5dd26a165a1719999f88b = 10000000000000000000133629449fa3c77646df4694a5dd26a165a1719999f88b
+
+            int(00000000000000000000133629449fa3c77646df4694a5dd26a165a1719999f88b) -> 78269016579367116504809940864964583459298460836234487301508747985658428620108
+            int(10000000000000000000133629449fa3c77646df4694a5dd26a165a1719999f88b) -> 100177116069166571919133493156763800146221258703109658905706358661026942163307
+
+            winner -> partyB
+         */
+
         // Start a pair of nodes and wait for them both to be ready.
         val (nodeA, nodeB) = startNodes(rpcUsers, partyA, partyB)
 
@@ -93,11 +117,15 @@ class BitcoinDrawTest {
         val partyBProxy: CordaRPCOps = newRPCProxy(nodeB)
 
         // GIVEN the flow parameters
-        val currentBitcoinBlock = BitcoinDrawState.BitcoinBlock("00000000000000000009100c3b97060ecaec44d843285f115b0d784502bf4d90",
-                564946, 388914000)
+        val currentBlockHeight = 564939
+        val block = readBitcoinBlock(currentBlockHeight)
+        val currentBlockHashString = block.hashAsString
+        val currentDifficultyTarget = block.difficultyTarget
 
-        val drawBlockHeight = 564947
-        val blocksForVerification = 1
+        val currentBitcoinBlock = BitcoinDrawState.BitcoinBlock(currentBlockHashString, currentBlockHeight, currentDifficultyTarget)
+
+        val drawBlockHeight = 564943 //hash id: 000000000000000000133629449fa3c77646df4694a5dd26a165a1719999f88b
+        val blocksForVerification = 5
 
         // AND partyA setups a draw
         val pairResult = partyAProxy.startFlow(SetupBitcoinDrawFlow::Setup,
@@ -126,11 +154,7 @@ class BitcoinDrawTest {
 
         // WHEN partyB performs the draw based on the provided Bitcoin blocks they should be able
         // to spend the transaction. Based on the winning block hash, partyB should be the winner (deterministically defined)
-        val winningBlockBytes_564947 = this::class.java.classLoader.getResource("blocks_564947.dat").readBytes()
-        val winningBlockBytes_564948 = this::class.java.classLoader.getResource("blocks_564948.dat").readBytes()
-
-        // populate the list of blocks
-        val blocks = mutableListOf(winningBlockBytes_564947, winningBlockBytes_564948)
+        val blocks = loadBitcoinBlocks(564940, 564948)
 
         // AND the first party can't spend the transaction because is not the winner
         try {
@@ -143,6 +167,25 @@ class BitcoinDrawTest {
 
         // THEN it should be the winner and the transaction should pass
         assertNotNull(drawTransaction)
+    }
+
+    private fun readBitcoinBlock(bitoinBlockHeight: Int): Block {
+        val blockBytes = this::class.java.classLoader.getResource("blocks_$bitoinBlockHeight.dat").readBytes()
+
+        val params = MainNetParams.get()
+        Context.getOrCreate(params)
+
+        val bitcoinSerializer = BitcoinSerializer(params, false)
+
+        return bitcoinSerializer.deserialize(ByteBuffer.wrap(blockBytes)) as Block
+    }
+
+    private fun loadBitcoinBlocks(fromBitcoinBlock : Int, toBitcoinBlock: Int): List<ByteArray> {
+        return IntStream
+                .rangeClosed(fromBitcoinBlock, toBitcoinBlock)
+                .boxed()
+                .map { i -> this::class.java.classLoader.getResource("blocks_$i.dat").readBytes() }
+                .toList()
     }
 
     // Runs a test inside the Driver DSL, which provides useful functions for starting nodes, etc.

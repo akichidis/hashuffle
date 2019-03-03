@@ -61,11 +61,11 @@ open class BitcoinDrawContract : Contract {
                     val drawBlock = providedBitcoinBlocks[drawBlockIndex]
 
                     // Calculate the scores for the participants
-                    val participantsWithScores = drawState
+                    var participantsWithScores = drawState
                             .drawParticipants.map { p -> Pair(p, toInt(SecureHash.sha256(p.ticketId.toString() + drawBlock.hashAsString))) }
 
                     //Sort based on the hash int results (asc)
-                    participantsWithScores.sortedBy { p -> p.second }
+                    participantsWithScores = participantsWithScores.sortedBy { p -> p.second }
 
                     val winner = participantsWithScores.last()
 

@@ -18,10 +18,11 @@ import java.util.concurrent.Future;
 public class FetchBlock {
 
     public static void main(String[] args) throws Exception {
-        BriefLogFormatter.init();
+        Sha256Hash blockHash = Sha256Hash.wrap("0000000000000000002214f7766f846fedd7a8f5bb7c3d65d15f13158fe907f0");
+        int numOfBlocksToDownload = 10;
+        int blockHeight = 564948;
 
-        boolean isLocalhost = false;
-        String blockHashString = "0000000000000000002214f7766f846fedd7a8f5bb7c3d65d15f13158fe907f0";
+        BriefLogFormatter.init();
 
         // Connect to testnet and find a peer
         System.out.println("Connecting to node");
@@ -37,20 +38,28 @@ public class FetchBlock {
         peerGroup.waitForPeers(2).get();
         Peer peer = peerGroup.getConnectedPeers().get(0);
 
-        // Retrieve a block through a peer
-        Sha256Hash blockHash = Sha256Hash.wrap(blockHashString);
-        Future<Block> future = peer.getBlock(blockHash);
+        BitcoinSerializer bitcoinSerializer = new BitcoinSerializer(params, false);
 
-        System.out.println("Waiting for node to send us the requested block: " + blockHash);
+        for (int i=numOfBlocksToDownload; i>0; i--) {
+            Future<Block> future = peer.getBlock(blockHash);
 
-        Block block = future.get();
+            System.out.println("Waiting for node to send us the requested block: " + blockHash.toString());
 
-        System.out.println(block);
+            Block block = future.get();
 
-        FileOutputStream outputStream = new FileOutputStream(new File("blocks_564948.dat"));
-        new BitcoinSerializer(params, false).serialize(block, outputStream);
 
-        outputStream.close();
+            FileOutputStream outputStream = new FileOutputStream(new File("bitcoinblocks/blocks_" + blockHeight + ".dat"));
+            bitcoinSerializer.serialize(block, outputStream);
+
+            blockHeight--;
+
+            outputStream.close();
+
+            System.out.println("Downloaded and saved block: " + block.getHashAsString());
+
+            // update the hash
+            blockHash = block.getPrevBlockHash();
+        }
 
         peerGroup.stopAsync();
     }
