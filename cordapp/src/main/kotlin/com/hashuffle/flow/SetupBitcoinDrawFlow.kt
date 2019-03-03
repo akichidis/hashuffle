@@ -5,10 +5,8 @@ import com.hashuffle.contract.BitcoinDrawContract
 import com.hashuffle.state.BitcoinDrawState
 import net.corda.core.contracts.Command
 import net.corda.core.contracts.UniqueIdentifier
-import net.corda.core.flows.FinalityFlow
-import net.corda.core.flows.FlowLogic
-import net.corda.core.flows.InitiatingFlow
-import net.corda.core.flows.StartableByRPC
+import net.corda.core.contracts.requireThat
+import net.corda.core.flows.*
 import net.corda.core.identity.Party
 import net.corda.core.transactions.SignedTransaction
 import net.corda.core.transactions.TransactionBuilder
@@ -24,9 +22,7 @@ object SetupBitcoinDrawFlow {
 
     @StartableByRPC
     @InitiatingFlow
-    class Setup(val currentBlockHash: String,
-                val currentBlockHeight: Int,
-                val currentBlockDifficulty: Long,
+    class Setup(val currentBitcoinBlock: BitcoinDrawState.BitcoinBlock,
                 val drawBlockHeight: Int,
                 val blocksForVerification: Int,
                 val otherParticipant: Party) : FlowLogic<Pair<UniqueIdentifier, SignedTransaction>>() {
@@ -37,6 +33,9 @@ object SetupBitcoinDrawFlow {
         companion object {
             object CREATE_DRAW : ProgressTracker.Step("Create the draw.")
             object SIGN_DRAW : ProgressTracker.Step("Sign the draw.")
+            object GATHERING_SIGS : ProgressTracker.Step("Gathering the counterparty's signature.") {
+                override fun childProgressTracker() = CollectSignaturesFlow.tracker()
+            }
             object FINALISING_TRANSACTION : ProgressTracker.Step("Obtaining notary signature and recording transaction.") {
                 override fun childProgressTracker() = FinalityFlow.tracker()
             }
@@ -44,6 +43,7 @@ object SetupBitcoinDrawFlow {
             fun tracker() = ProgressTracker(
                     CREATE_DRAW,
                     SIGN_DRAW,
+                    GATHERING_SIGS,
                     FINALISING_TRANSACTION
             )
         }
@@ -58,41 +58,17 @@ object SetupBitcoinDrawFlow {
             val notary = serviceHub.networkMapCache.notaryIdentities[0]
             val me = serviceHub.myInfo.legalIdentities.single()
 
+            val otherNode = serviceHub.networkMapCache.getNodesByLegalName(otherParticipant.name)
+
             // Stage 1. Create the draw state
             progressTracker.currentStep = CREATE_DRAW
 
-            /*
-
-            "00000000000000000009100c3b97060ecaec44d843285f115b0d784502bf4d90", 564946, 6071846049920),
-                    564947,
-                    1,
-
-             */
-
-            // read the Bitcoin block bytes
-            /*
-            val winningBlockBytes_564947 = File("/Users/tasos/Documents/Workspace/Kotlin/lightning-chess/blocks_564947.dat").readBytes()
-            val winningBlockBytes_564948 = File("/Users/tasos/Documents/Workspace/Kotlin/lightning-chess/blocks_564948.dat").readBytes()
-
-            // populate the list of blocks
-            val blocks = mutableListOf(winningBlockBytes_564947, winningBlockBytes_564948)
-
-            val bitcoinDrawState = BitcoinDrawState(
-                    BitcoinDrawState.BitcoinBlock("00000000000000000009100c3b97060ecaec44d843285f115b0d784502bf4d90", 564946, 6071846049920),
-                    564947,
-                    1,
-                    listOf(BitcoinDrawState.Participant(me, 99)))
-            */
-
-
             // create the current block
-            val currentBlock = BitcoinDrawState.BitcoinBlock(currentBlockHash, currentBlockHeight, currentBlockDifficulty)
-
             val participants = mutableListOf(BitcoinDrawState.Participant(me, 0),
                     BitcoinDrawState.Participant(otherParticipant, 1))
 
             // create the draw state
-            val bitcoinDrawState = BitcoinDrawState(currentBlock, drawBlockHeight, blocksForVerification, participants)
+            val bitcoinDrawState = BitcoinDrawState(currentBitcoinBlock, drawBlockHeight, blocksForVerification, participants)
 
             // the list of signers
             val signers = listOf(me.owningKey, otherParticipant.owningKey)
@@ -107,11 +83,43 @@ object SetupBitcoinDrawFlow {
 
             val signedTx = serviceHub.signInitialTransaction(txBuilder)
 
-            // Stage 3.
+            // Stage 3. Send it to other parties to sign
+            progressTracker.currentStep = GATHERING_SIGS
+
+            val otherPartyFlow = initiateFlow(otherParticipant)
+            val fullySignedTx = subFlow(CollectSignaturesFlow(signedTx, setOf(otherPartyFlow), GATHERING_SIGS.childProgressTracker()))
+
+            // Stage 4.
             progressTracker.currentStep = FINALISING_TRANSACTION
 
             // Notarise and record the transaction in both parties' vaults.
-            return Pair(bitcoinDrawState.linearId, subFlow(FinalityFlow(signedTx, FINALISING_TRANSACTION.childProgressTracker())))
+            return Pair(bitcoinDrawState.linearId, subFlow(FinalityFlow(fullySignedTx, FINALISING_TRANSACTION.childProgressTracker())))
+        }
+    }
+
+    @InitiatedBy(SetupBitcoinDrawFlow.Setup::class)
+    class Acceptor(val otherPartyFlow: FlowSession) : FlowLogic<SignedTransaction>() {
+        object SIGNING_TRANSACTION : ProgressTracker.Step("Signing transaction with our private key.")
+
+        companion object {
+            fun tracker() = ProgressTracker(
+                    SIGNING_TRANSACTION
+            )
+        }
+
+        override val progressTracker = tracker()
+
+        @Suspendable
+        override fun call(): SignedTransaction {
+            progressTracker.currentStep = SIGNING_TRANSACTION
+
+            val signTransactionFlow = object : SignTransactionFlow(otherPartyFlow) {
+                override fun checkTransaction(stx: SignedTransaction) = requireThat {
+                    val outputDrawState = stx.tx.outputsOfType<BitcoinDrawState>().single()
+                }
+            }
+
+            return subFlow(signTransactionFlow)
         }
     }
 }

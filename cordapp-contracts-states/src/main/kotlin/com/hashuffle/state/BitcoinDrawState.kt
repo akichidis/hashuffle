@@ -41,10 +41,10 @@ data class BitcoinDrawState(// the current bitcoin block which is used as referr
                             val hash: String,
                             // the block's height
                             var blockHeight: Int,
-                            // the current block's difficulty. When a draw is performed, the difficulty of the
+                            // the current block's difficulty target (nBits). When a draw is performed, the difficulty of the
                             // provided blocks should match the current one (we ignore for now the cases where network's
                             // difficulty is adjusted in the meanwhile)
-                            val currentBlockDifficulty: Long) {
+                            val difficultyTarget: Long) {
 
         companion object {
             val EMPTY_BLOCK = BitcoinBlock("", 0, 0)
@@ -62,7 +62,7 @@ data class BitcoinDrawState(// the current bitcoin block which is used as referr
                 BitcoinDrawSchemaV1.PersistentDraw(
                         currentBlock.hash,
                         currentBlock.blockHeight,
-                        currentBlock.currentBlockDifficulty,
+                        currentBlock.difficultyTarget,
                         drawBlockHeight,
                         participants,
                         numberOfBlocksForVerification,

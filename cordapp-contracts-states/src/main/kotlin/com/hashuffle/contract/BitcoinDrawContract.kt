@@ -54,7 +54,7 @@ open class BitcoinDrawContract : Contract {
 
                     val providedBitcoinBlocks = deserialiseBlockchainBlocks(performDrawCommand.blockListForDraw)
 
-                    "Blockchain is invalid" using isBlockchainValid(drawState.currentBlock.hash, drawState.currentBlock.currentBlockDifficulty, providedBitcoinBlocks)
+                    "Blockchain is invalid" using isBlockchainValid(drawState.currentBlock.hash, drawState.currentBlock.difficultyTarget, providedBitcoinBlocks)
 
                     // Find the block to use for the draw
                     val drawBlockIndex = drawState.drawBlockHeight - drawState.currentBlock.blockHeight - 1

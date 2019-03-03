@@ -28,8 +28,8 @@ object BitcoinDrawSchemaV1 : MappedSchema(
             @Column(name = "current_block_height")
             var currentBlockHeight: Int,
 
-            @Column(name = "current_block_difficulty")
-            var currentBlockDifficulty: Long,
+            @Column(name = "current_block_target_difficulty")
+            var currentBlockTargetDifficulty: Long,
 
             @Column(name = "draw_block_height")
             var drawBlockHeight: Int,
