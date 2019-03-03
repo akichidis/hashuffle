@@ -70,7 +70,7 @@ class BitcoinDrawTest {
                 currentBitcoinBlock,
                 drawBlockHeight,
                 blocksForVerification,
-                nodeB.nodeInfo.singleIdentity())
+                listOf(nodeB.nodeInfo.singleIdentity()))
                 .returnValue
                 .getOrThrow()
 
@@ -132,7 +132,7 @@ class BitcoinDrawTest {
                 currentBitcoinBlock,
                 drawBlockHeight,
                 blocksForVerification,
-                nodeB.nodeInfo.singleIdentity())
+                listOf(nodeB.nodeInfo.singleIdentity()))
                 .returnValue
                 .getOrThrow()
 

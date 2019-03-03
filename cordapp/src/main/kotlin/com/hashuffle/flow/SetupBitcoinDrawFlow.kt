@@ -13,6 +13,7 @@ import net.corda.core.transactions.TransactionBuilder
 import net.corda.core.utilities.ProgressTracker
 import java.io.File
 import java.util.*
+import java.util.stream.IntStream
 
 /**
  * This flow setups the draw by creating the necessary
@@ -25,7 +26,7 @@ object SetupBitcoinDrawFlow {
     class Setup(val currentBitcoinBlock: BitcoinDrawState.BitcoinBlock,
                 val drawBlockHeight: Int,
                 val blocksForVerification: Int,
-                val otherParticipant: Party) : FlowLogic<Pair<UniqueIdentifier, SignedTransaction>>() {
+                val otherParticipants: List<Party>) : FlowLogic<Pair<UniqueIdentifier, SignedTransaction>>() {
         /**
          * The progress tracker checkpoints each stage of the flow and outputs the specified messages when each
          * checkpoint is reached in the code. See the 'progressTracker.currentStep' expressions within the call() function.
@@ -58,20 +59,20 @@ object SetupBitcoinDrawFlow {
             val notary = serviceHub.networkMapCache.notaryIdentities[0]
             val me = serviceHub.myInfo.legalIdentities.single()
 
-            val otherNode = serviceHub.networkMapCache.getNodesByLegalName(otherParticipant.name)
-
             // Stage 1. Create the draw state
             progressTracker.currentStep = CREATE_DRAW
 
             // create the current block
-            val participants = mutableListOf(BitcoinDrawState.Participant(me, 0),
-                    BitcoinDrawState.Participant(otherParticipant, 1))
+            val participants = mutableListOf(BitcoinDrawState.Participant(me, 0))
+
+            IntStream.range(0, otherParticipants.size).boxed()
+                    .forEach { i -> participants.add(BitcoinDrawState.Participant(otherParticipants[i], i+1)) }
 
             // create the draw state
             val bitcoinDrawState = BitcoinDrawState(currentBitcoinBlock, drawBlockHeight, blocksForVerification, participants)
 
             // the list of signers
-            val signers = listOf(me.owningKey, otherParticipant.owningKey)
+            val signers = participants.map { p -> p.party.owningKey }
 
             val txCommand = Command(BitcoinDrawContract.Commands.Setup(), signers)
             val txBuilder = TransactionBuilder(notary)
@@ -86,8 +87,8 @@ object SetupBitcoinDrawFlow {
             // Stage 3. Send it to other parties to sign
             progressTracker.currentStep = GATHERING_SIGS
 
-            val otherPartyFlow = initiateFlow(otherParticipant)
-            val fullySignedTx = subFlow(CollectSignaturesFlow(signedTx, setOf(otherPartyFlow), GATHERING_SIGS.childProgressTracker()))
+            val otherPartyFlows = otherParticipants.map { party -> initiateFlow(party) }.toSet()
+            val fullySignedTx = subFlow(CollectSignaturesFlow(signedTx, otherPartyFlows, GATHERING_SIGS.childProgressTracker()))
 
             // Stage 4.
             progressTracker.currentStep = FINALISING_TRANSACTION
