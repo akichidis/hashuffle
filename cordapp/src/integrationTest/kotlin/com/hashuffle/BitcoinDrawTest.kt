@@ -38,6 +38,7 @@ class BitcoinDrawTest {
     private val notary = TestIdentity(CordaX500Name("Notary", "London", "GB"))
     private val partyA = TestIdentity(CordaX500Name("PartyA", "London", "GB"))
     private val partyB = TestIdentity(CordaX500Name("PartyB", "London", "GB"))
+    private val partyC = TestIdentity(CordaX500Name("PartyC", "London", "GB"))
 
     @Test
     @Ignore
@@ -98,20 +99,25 @@ class BitcoinDrawTest {
 
             partyA ticket ID = 0
             partyB ticket ID = 1
+            partyC ticket ID = 2
 
             draw block hash = 000000000000000000133629449fa3c77646df4694a5dd26a165a1719999f88b
 
             partyATicket + hash = 0 + 0000000000000000000133629449fa3c77646df4694a5dd26a165a1719999f88b = 00000000000000000000133629449fa3c77646df4694a5dd26a165a1719999f88b
             partyBTicket + hash = 1 + 0000000000000000000133629449fa3c77646df4694a5dd26a165a1719999f88b = 10000000000000000000133629449fa3c77646df4694a5dd26a165a1719999f88b
+            partyCTicket + hash = 2 + 0000000000000000000133629449fa3c77646df4694a5dd26a165a1719999f88b = 20000000000000000000133629449fa3c77646df4694a5dd26a165a1719999f88b
 
-            int(00000000000000000000133629449fa3c77646df4694a5dd26a165a1719999f88b) -> 78269016579367116504809940864964583459298460836234487301508747985658428620108
-            int(10000000000000000000133629449fa3c77646df4694a5dd26a165a1719999f88b) -> 100177116069166571919133493156763800146221258703109658905706358661026942163307
+            partyA -> int(00000000000000000000133629449fa3c77646df4694a5dd26a165a1719999f88b) -> 78269016579367116504809940864964583459298460836234487301508747985658428620108
+            partyB -> int(10000000000000000000133629449fa3c77646df4694a5dd26a165a1719999f88b) -> 100177116069166571919133493156763800146221258703109658905706358661026942163307
+            partyC -> int(20000000000000000000133629449fa3c77646df4694a5dd26a165a1719999f88b) -> 22086422636655313275234111700317867271265478409424734635483530821006776939120
+
+            After ordering ASC, the last one is partyB
 
             winner -> partyB
          */
 
         // Start a pair of nodes and wait for them both to be ready.
-        val (nodeA, nodeB) = startNodes(rpcUsers, partyA, partyB)
+        val (nodeA, nodeB, nodeC) = startNodes(rpcUsers, partyA, partyB, partyC)
 
         val partyAProxy: CordaRPCOps = newRPCProxy(nodeA)
         val partyBProxy: CordaRPCOps = newRPCProxy(nodeB)
@@ -132,7 +138,7 @@ class BitcoinDrawTest {
                 currentBitcoinBlock,
                 drawBlockHeight,
                 blocksForVerification,
-                listOf(nodeB.nodeInfo.singleIdentity()))
+                listOf(nodeB.nodeInfo.singleIdentity(), nodeC.nodeInfo.singleIdentity()))
                 .returnValue
                 .getOrThrow()
 
