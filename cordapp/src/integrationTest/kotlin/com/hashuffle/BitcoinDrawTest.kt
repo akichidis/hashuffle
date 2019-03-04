@@ -65,12 +65,14 @@ class BitcoinDrawTest {
 
         val drawBlockHeight = 564942
         val blocksForVerification = 6
+        val participationFee = 10L
 
         // The partyA setups a draw
         val pairResult = partyAProxy.startFlow(SetupBitcoinDrawFlow::Setup,
                 currentBitcoinBlock,
                 drawBlockHeight,
                 blocksForVerification,
+                participationFee,
                 listOf(nodeB.nodeInfo.singleIdentity()))
                 .returnValue
                 .getOrThrow()
@@ -132,12 +134,14 @@ class BitcoinDrawTest {
 
         val drawBlockHeight = 564943 //hash id: 000000000000000000133629449fa3c77646df4694a5dd26a165a1719999f88b
         val blocksForVerification = 5
+        val participationFee = 10L
 
         // AND partyA setups a draw
         val pairResult = partyAProxy.startFlow(SetupBitcoinDrawFlow::Setup,
                 currentBitcoinBlock,
                 drawBlockHeight,
                 blocksForVerification,
+                participationFee,
                 listOf(nodeB.nodeInfo.singleIdentity(), nodeC.nodeInfo.singleIdentity()))
                 .returnValue
                 .getOrThrow()
