@@ -8,11 +8,9 @@ import net.corda.core.contracts.UniqueIdentifier
 import net.corda.core.contracts.requireThat
 import net.corda.core.flows.*
 import net.corda.core.identity.Party
-import net.corda.core.serialization.CordaSerializable
 import net.corda.core.transactions.SignedTransaction
 import net.corda.core.transactions.TransactionBuilder
 import net.corda.core.utilities.ProgressTracker
-import net.corda.core.utilities.unwrap
 import java.util.stream.IntStream
 
 /**
@@ -33,6 +31,7 @@ object SetupBitcoinDrawFlow {
          * checkpoint is reached in the code. See the 'progressTracker.currentStep' expressions within the call() function.
          */
         companion object {
+            object SEND_DRAW_PROPOSAL : ProgressTracker.Step("Sending draw proposal")
             object CREATE_DRAW : ProgressTracker.Step("Create the draw.")
             object SIGN_DRAW : ProgressTracker.Step("Sign the draw.")
             object GATHERING_SIGS : ProgressTracker.Step("Gathering the counterparty's signature.") {
@@ -44,6 +43,7 @@ object SetupBitcoinDrawFlow {
             }
 
             fun tracker() = ProgressTracker(
+                    SEND_DRAW_PROPOSAL,
                     CREATE_DRAW,
                     SIGN_DRAW,
                     GATHERING_SIGS,
@@ -61,6 +61,9 @@ object SetupBitcoinDrawFlow {
             val notary = serviceHub.networkMapCache.notaryIdentities[0]
             val me = serviceHub.myInfo.legalIdentities.single()
 
+            // Stage 1. Send draw proposals
+            progressTracker.currentStep = SEND_DRAW_PROPOSAL
+
             // First step should be to send the proposal to
             // the other nodes.
 
@@ -69,21 +72,21 @@ object SetupBitcoinDrawFlow {
             // by the proposal state)
             val otherPartyFlows = otherParticipants.map { party -> initiateFlow(party) }.toSet()
 
-            // Send the draw proposals and retrieve their responses
-            val drawProposal = DrawProposal(currentBitcoinBlock, participationFee)
+            // send the proposal and gather the positive participations
+            val partiesToParticipate = sendDrawProposals(otherPartyFlows)
 
-            val drawProposalResponses = subFlow(DrawProposalFlow(otherPartyFlows, drawProposal))
+            requireThat {
+                "There should be at least one positive reply" using (partiesToParticipate.isNotEmpty())
+            }
 
-            drawProposalResponses.forEach { s -> logger.info("Received: $s") }
-
-            // Stage 1. Create the draw state
+            // Stage 2. Create the draw state
             progressTracker.currentStep = CREATE_DRAW
 
             // create the current block
             val participants = mutableListOf(BitcoinDrawState.Participant(me, 0))
 
-            IntStream.range(0, otherParticipants.size).boxed()
-                    .forEach { i -> participants.add(BitcoinDrawState.Participant(otherParticipants[i], i + 1)) }
+            IntStream.range(0, partiesToParticipate.size).boxed()
+                    .forEach { i -> participants.add(BitcoinDrawState.Participant(partiesToParticipate[i], i + 1)) }
 
             // create the draw state
             val bitcoinDrawState = BitcoinDrawState(currentBitcoinBlock, drawBlockHeight, blocksForVerification, participants)
@@ -111,6 +114,23 @@ object SetupBitcoinDrawFlow {
 
             // Notarise and record the transaction in both parties' vaults.
             return Pair(bitcoinDrawState.linearId, subFlow(FinalityFlow(fullySignedTx, FINALISING_TRANSACTION.childProgressTracker())))
+        }
+
+
+        private fun sendDrawProposals(otherPartyFlows: Set<FlowSession>): List<Party> {
+            // Send the draw proposals and retrieve their responses
+            val drawProposal = DrawProposal(currentBitcoinBlock, participationFee)
+
+            val drawProposalResponses = subFlow(DrawProposalFlow(otherPartyFlows, drawProposal))
+
+            // gather only the positive responses
+            val positiveResponsesParties = drawProposalResponses.
+                    filter { pair -> pair.second }
+                    .map { pair ->
+                        logger.info("Accepted positive reply: ${pair.first.name}")
+                        pair.first }
+
+            return positiveResponsesParties
         }
     }
 
@@ -140,67 +160,5 @@ object SetupBitcoinDrawFlow {
 
             return subFlow(signTransactionFlow)
         }
-    }
-}
-
-@CordaSerializable
-data class DrawProposal(val currentBitcoinBlock: BitcoinDrawState.BitcoinBlock,
-                        val participationFee: Long)
-
-
-class DrawProposalFlow(val sessionsToPropose: Collection<FlowSession>,
-                       val drawProposal: DrawProposal) : FlowLogic<Collection<Boolean>>() {
-    companion object {
-        object PROPOSAL : ProgressTracker.Step("Sending proposals to counterparties.")
-        object RETRIEVED_RESPONSES : ProgressTracker.Step("Retrieved responses by counterparties.")
-
-        @JvmStatic
-        fun tracker() = ProgressTracker(PROPOSAL, RETRIEVED_RESPONSES)
-    }
-
-    override val progressTracker: ProgressTracker = DrawProposalFlow.tracker()
-
-    @Suspendable
-    override fun call(): Collection<Boolean> {
-        progressTracker.currentStep = PROPOSAL
-
-        // For all the sessions, send the current bitcoin proposal
-        val participations = sessionsToPropose.map { session ->
-
-            session.send(drawProposal)
-            session.receive<Boolean>().unwrap { s -> s }
-
-        }
-
-        progressTracker.currentStep = RETRIEVED_RESPONSES
-
-        return participations
-    }
-}
-
-class DrawProposalReply(val otherSideSession: FlowSession,
-                        override val progressTracker: ProgressTracker = DrawProposalReply.tracker()) : FlowLogic<Boolean>() {
-    companion object {
-        object REPLY_TO_PROPOSAL : ProgressTracker.Step("Replying to proposal.")
-
-        @JvmStatic
-        fun tracker() = ProgressTracker(REPLY_TO_PROPOSAL)
-    }
-
-    @Suspendable
-    override fun call(): Boolean {
-        val me = serviceHub.myInfo.legalIdentities.single()
-
-        // Wait to get the proposal
-        val proposal = otherSideSession.receive<DrawProposal>().unwrap { p -> p }
-
-        progressTracker.currentStep = REPLY_TO_PROPOSAL
-
-        logger.info("Received proposal for draw with current hash: ${proposal.currentBitcoinBlock.hash}")
-        logger.info("Received proposal for draw fee: ${proposal.participationFee}")
-
-        otherSideSession.send(true)
-
-        return true
     }
 }
