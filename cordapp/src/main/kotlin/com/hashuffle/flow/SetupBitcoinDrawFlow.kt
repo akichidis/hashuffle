@@ -116,7 +116,7 @@ object SetupBitcoinDrawFlow {
             return Pair(bitcoinDrawState.linearId, subFlow(FinalityFlow(fullySignedTx, FINALISING_TRANSACTION.childProgressTracker())))
         }
 
-
+        @Suspendable
         private fun sendDrawProposals(otherPartyFlows: Set<FlowSession>): List<Party> {
             // Send the draw proposals and retrieve their responses
             val drawProposal = DrawProposal(currentBitcoinBlock, participationFee)
