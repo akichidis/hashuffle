@@ -2,12 +2,18 @@ package com.hashuffle.flow
 
 import co.paralleluniverse.fibers.Suspendable
 import com.hashuffle.contract.BitcoinDrawContract
+import com.hashuffle.schema.HashuffleTokenSchemaV1
 import com.hashuffle.state.BitcoinDrawState
+import com.hashuffle.state.HashuffleTokenState
 import net.corda.core.contracts.Command
+import net.corda.core.contracts.StateAndRef
 import net.corda.core.contracts.UniqueIdentifier
 import net.corda.core.contracts.requireThat
 import net.corda.core.flows.*
 import net.corda.core.identity.Party
+import net.corda.core.node.services.Vault
+import net.corda.core.node.services.vault.QueryCriteria
+import net.corda.core.node.services.vault.builder
 import net.corda.core.transactions.SignedTransaction
 import net.corda.core.transactions.TransactionBuilder
 import net.corda.core.utilities.ProgressTracker
@@ -73,31 +79,17 @@ object SetupBitcoinDrawFlow {
             val otherPartyFlows = otherParticipants.map { party -> initiateFlow(party) }.toSet()
 
             // send the proposal and gather the positive participations
-            val partiesToParticipate = sendDrawProposals(otherPartyFlows)
+            val participantsWithTokens = sendDrawProposals(otherPartyFlows).toMutableList()
 
             requireThat {
-                "There should be at least one positive reply" using (partiesToParticipate.isNotEmpty())
+                "There should be at least one positive reply" using (participantsWithTokens.isNotEmpty())
             }
 
             // Stage 2. Create the draw state
             progressTracker.currentStep = CREATE_DRAW
 
-            // create the current block
-            val participants = mutableListOf(BitcoinDrawState.Participant(me, 0))
-
-            IntStream.range(0, partiesToParticipate.size).boxed()
-                    .forEach { i -> participants.add(BitcoinDrawState.Participant(partiesToParticipate[i], i + 1)) }
-
-            // create the draw state
-            val bitcoinDrawState = BitcoinDrawState(currentBitcoinBlock, drawBlockHeight, blocksForVerification, participants)
-
-            // the list of signers
-            val signers = participants.map { p -> p.party.owningKey }
-
-            val txCommand = Command(BitcoinDrawContract.Commands.Setup(), signers)
-            val txBuilder = TransactionBuilder(notary)
-                    .addOutputState(bitcoinDrawState, BitcoinDrawContract.DRAW_CONTRACT_ID)
-                    .addCommand(txCommand)
+            // build the transaction
+            val (txBuilder, bitcoinDrawState) = buildTransaction(me, notary, participantsWithTokens, currentBitcoinBlock, drawBlockHeight, blocksForVerification)
 
             // Stage 2. Sign the transaction.
             progressTracker.currentStep = SIGN_DRAW
@@ -117,20 +109,85 @@ object SetupBitcoinDrawFlow {
         }
 
         @Suspendable
-        private fun sendDrawProposals(otherPartyFlows: Set<FlowSession>): List<Party> {
+        private fun sendDrawProposals(otherPartyFlows: Set<FlowSession>): List<Pair<Party, List<StateAndRef<HashuffleTokenState>>>> {
             // Send the draw proposals and retrieve their responses
             val drawProposal = DrawProposal(currentBitcoinBlock, participationFee)
 
+            // gather the "positive" responses
             val drawProposalResponses = subFlow(DrawProposalFlow(otherPartyFlows, drawProposal))
 
-            // gather only the positive responses
-            val positiveResponsesParties = drawProposalResponses.
-                    filter { pair -> pair.second }
-                    .map { pair ->
-                        logger.info("Accepted positive reply: ${pair.first.name}")
-                        pair.first }
+            return drawProposalResponses.filter { pair ->
+                logger.info("Accepted reply from: ${pair.first.name}")
+                logger.info("Received: ${pair.second.size} states")
 
-            return positiveResponsesParties
+                if (pair.second.isEmpty()) {
+                    logger.info("Node ${pair.first.name} will not participate")
+                    return@filter false
+                }
+
+                logger.info("Node ${pair.first.name} will participate")
+
+                return@filter true
+            }
+        }
+
+        @Suspendable
+        private fun buildTransaction(me: Party,
+                                     notary: Party,
+                                     participantsWithTokens: MutableList<Pair<Party, List<StateAndRef<HashuffleTokenState>>>>,
+                                     currentBitcoinBlock: BitcoinDrawState.BitcoinBlock,
+                                     drawBlockHeight: Int,
+                                     blocksForVerification: Int): Pair<TransactionBuilder, BitcoinDrawState> {
+            // First find a Hashuffle Token for me
+            val hashuffleToken = findAHashuffleToken(participationFee)
+
+            requireThat {
+                "Couldn't find a hashuffle token to participate. Can't organise draw!" using hashuffleToken.isEmpty()
+            }
+
+            // add my token as well
+            participantsWithTokens.add(Pair(me, hashuffleToken))
+
+            val participants = ArrayList<BitcoinDrawState.Participant>()
+
+            // create the list of participants
+            IntStream.range(0, participantsWithTokens.size).boxed()
+                    .forEach { i -> participants.add(BitcoinDrawState.Participant(participantsWithTokens[i].first, i)) }
+
+            // create the draw state
+            val bitcoinDrawState = BitcoinDrawState(currentBitcoinBlock, drawBlockHeight, blocksForVerification, participants)
+
+            // the list of signers
+            val signers = participants.map { p -> p.party.owningKey }
+
+            val txCommand = Command(BitcoinDrawContract.Commands.Setup(), signers)
+            val txBuilder = TransactionBuilder(notary)
+                    .addOutputState(bitcoinDrawState, BitcoinDrawContract.DRAW_CONTRACT_ID)
+                    .addCommand(txCommand)
+
+            // add the hashuffle input states
+            // Note: For simplification we assume that every participant's tokens
+            // list will contain only one state token
+            participantsWithTokens.forEach { p -> txBuilder.addInputState(p.second.first()) }
+
+            return Pair(txBuilder, bitcoinDrawState)
+        }
+
+        /**
+         * This method returns the hashuffle tokens to match the required participation fee. Although a list
+         * is returned, we expect to return either 0 (if there is none available) or 1.
+         */
+        @Suspendable
+        private fun findAHashuffleToken(participationFee: Long): List<StateAndRef<HashuffleTokenState>> {
+            // create the query builder
+            val feeCompare = builder { HashuffleTokenSchemaV1.HashuffleToken::value.equal(participationFee) }
+
+            // we want only unconsumed states
+            val criteria = QueryCriteria.VaultCustomQueryCriteria(feeCompare, status = Vault.StateStatus.UNCONSUMED)
+
+            // find for a HashuffleToken on the vault which matches the criteria
+            return serviceHub.vaultService
+                    .queryBy(HashuffleTokenState::class.java, criteria).states
         }
     }
 

@@ -1,5 +1,6 @@
 package com.hashuffle
 
+import com.hashuffle.flow.IssueHashuffleTokenFlow
 import com.hashuffle.flow.PerformDrawFlow
 import com.hashuffle.flow.SetupBitcoinDrawFlow
 import com.hashuffle.state.BitcoinDrawState
@@ -135,6 +136,12 @@ class BitcoinDrawTest {
         val drawBlockHeight = 564943 //hash id: 000000000000000000133629449fa3c77646df4694a5dd26a165a1719999f88b
         val blocksForVerification = 5
         val participationFee = 10L
+
+        // give some tokens for both party A & B - for simplicity reasons the
+        // nodes can issue those tokens them selfs
+        val tokenFee = 10L
+        partyAProxy.startFlow(IssueHashuffleTokenFlow::Issue, tokenFee).returnValue.getOrThrow()
+        partyBProxy.startFlow(IssueHashuffleTokenFlow::Issue, tokenFee).returnValue.getOrThrow()
 
         // AND partyA setups a draw
         val pairResult = partyAProxy.startFlow(SetupBitcoinDrawFlow::Setup,
