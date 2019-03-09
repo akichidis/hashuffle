@@ -2,6 +2,7 @@ package com.hashuffle.flow
 
 import co.paralleluniverse.fibers.Suspendable
 import com.hashuffle.contract.BitcoinDrawContract
+import com.hashuffle.contract.HashuffleTokenContract
 import com.hashuffle.schema.HashuffleTokenSchemaV1
 import com.hashuffle.state.BitcoinDrawState
 import com.hashuffle.state.HashuffleTokenState
@@ -99,7 +100,13 @@ object SetupBitcoinDrawFlow {
             // Stage 3. Send it to other parties to sign
             progressTracker.currentStep = GATHERING_SIGS
 
-            val fullySignedTx = subFlow(CollectSignaturesFlow(signedTx, otherPartyFlows, GATHERING_SIGS.childProgressTracker()))
+            // Get the sessions only of those participants for which
+            // we have a hashuffle token - hence accepted to participate on the Draw
+            val sessionsOfParticipants = otherPartyFlows
+                    .filter { f -> participantsWithTokens.firstOrNull { p -> p.first == f.counterparty } != null  }
+                    .toSet()
+
+            val fullySignedTx = subFlow(CollectSignaturesFlow(signedTx, sessionsOfParticipants, GATHERING_SIGS.childProgressTracker()))
 
             // Stage 4.
             progressTracker.currentStep = FINALISING_TRANSACTION
@@ -142,11 +149,12 @@ object SetupBitcoinDrawFlow {
             val hashuffleToken = findAHashuffleToken(participationFee)
 
             requireThat {
-                "Couldn't find a hashuffle token to participate. Can't organise draw!" using hashuffleToken.isEmpty()
+                "Couldn't find a hashuffle token to participate. Can't organise draw!" using hashuffleToken.isNotEmpty()
             }
 
-            // add my token as well
-            participantsWithTokens.add(Pair(me, hashuffleToken))
+            // add my token as well - for convention reasons the organiser
+            // will always be the first one of the list
+            participantsWithTokens.add(0, Pair(me, hashuffleToken))
 
             val participants = ArrayList<BitcoinDrawState.Participant>()
 
@@ -160,15 +168,25 @@ object SetupBitcoinDrawFlow {
             // the list of signers
             val signers = participants.map { p -> p.party.owningKey }
 
-            val txCommand = Command(BitcoinDrawContract.Commands.Setup(), signers)
+            val drawCommand = Command(BitcoinDrawContract.Commands.Setup(), signers)
+
             val txBuilder = TransactionBuilder(notary)
                     .addOutputState(bitcoinDrawState, BitcoinDrawContract.DRAW_CONTRACT_ID)
-                    .addCommand(txCommand)
+                    .addCommand(drawCommand)
 
             // add the hashuffle input states
             // Note: For simplification we assume that every participant's tokens
             // list will contain only one state token
             participantsWithTokens.forEach { p -> txBuilder.addInputState(p.second.first()) }
+
+            // Create the "prize" HashuffleToken and add it to the transaction
+            val prizeToken = HashuffleTokenState(participants.size * participationFee, null)
+            txBuilder.addOutputState(prizeToken, HashuffleTokenContract.CONTRACT_ID)
+
+            // Add the command which "sums" the tokens
+            val tokenCommand = Command(HashuffleTokenContract.Commands.Sum(), participantsWithTokens.map { p -> p.first.owningKey })
+
+            txBuilder.addCommand(tokenCommand)
 
             return Pair(txBuilder, bitcoinDrawState)
         }

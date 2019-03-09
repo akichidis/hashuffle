@@ -16,7 +16,7 @@ data class HashuffleTokenState(val value: Long,
 
     override val participants: List<AbstractParty> get() {
         if (owner != null) {
-            listOf(owner)
+            return listOf(owner)
         }
         return listOf()
     }
@@ -35,8 +35,4 @@ data class HashuffleTokenState(val value: Long,
     }
 
     override fun supportedSchemas() = listOf(HashuffleTokenSchemaV1)
-
-    companion object {
-        val EMPTY_TOKEN_STATE = HashuffleTokenState(0, null)
-    }
 }

@@ -1,11 +1,9 @@
 package com.hashuffle.schema
 
-import com.hashuffle.state.BitcoinDrawState
 import net.corda.core.identity.AbstractParty
 import net.corda.core.schemas.MappedSchema
 import net.corda.core.schemas.PersistentState
 import org.hibernate.annotations.Cascade
-import org.hibernate.annotations.Parent
 import java.util.*
 import javax.persistence.*
 

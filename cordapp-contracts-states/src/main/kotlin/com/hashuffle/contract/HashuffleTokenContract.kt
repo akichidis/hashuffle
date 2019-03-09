@@ -24,6 +24,10 @@ open class HashuffleTokenContract : Contract {
 
             }
 
+            is Commands.Spend -> {
+
+            }
+
             is Commands.Sum -> {
                 // cover the case where the sum of inputs should be equal to the exact output.
                 // if not we reject the transaction.
@@ -42,6 +46,6 @@ open class HashuffleTokenContract : Contract {
     interface Commands : CommandData {
         class Issue : Commands
         class Sum: Commands
-        class Transfer : Commands
+        class Spend : Commands
     }
 }

@@ -1,6 +1,5 @@
 package com.hashuffle.schema
 
-import com.hashuffle.state.HashuffleTokenState
 import net.corda.core.identity.AbstractParty
 import net.corda.core.schemas.MappedSchema
 import net.corda.core.schemas.PersistentState
@@ -17,7 +16,7 @@ object HashuffleTokenSchema
 object HashuffleTokenSchemaV1 : MappedSchema(
         schemaFamily = HashuffleTokenSchema.javaClass,
         version = 1,
-        mappedTypes = listOf(HashuffleTokenState::class.java)) {
+        mappedTypes = listOf(HashuffleToken::class.java)) {
 
     @Entity
     @Table(name = "hashuffle_token_states")

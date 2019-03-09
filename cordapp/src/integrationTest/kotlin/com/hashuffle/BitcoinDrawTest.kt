@@ -139,9 +139,8 @@ class BitcoinDrawTest {
 
         // give some tokens for both party A & B - for simplicity reasons the
         // nodes can issue those tokens them selfs
-        val tokenFee = 10L
-        partyAProxy.startFlow(IssueHashuffleTokenFlow::Issue, tokenFee).returnValue.getOrThrow()
-        partyBProxy.startFlow(IssueHashuffleTokenFlow::Issue, tokenFee).returnValue.getOrThrow()
+        partyAProxy.startFlow(IssueHashuffleTokenFlow::Issue, participationFee).returnValue.getOrThrow()
+        partyBProxy.startFlow(IssueHashuffleTokenFlow::Issue, participationFee).returnValue.getOrThrow()
 
         // AND partyA setups a draw
         val pairResult = partyAProxy.startFlow(SetupBitcoinDrawFlow::Setup,

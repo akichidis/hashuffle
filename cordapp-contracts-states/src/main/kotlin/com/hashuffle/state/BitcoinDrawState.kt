@@ -46,10 +46,6 @@ data class BitcoinDrawState(// the current bitcoin block which is used as referr
                             // difficulty is adjusted in the meanwhile)
                             val difficultyTarget: Long) {
 
-        companion object {
-            val EMPTY_BLOCK = BitcoinBlock("", 0, 0)
-        }
-
     }
 
     override fun generateMappedObject(schema: MappedSchema): PersistentState {
