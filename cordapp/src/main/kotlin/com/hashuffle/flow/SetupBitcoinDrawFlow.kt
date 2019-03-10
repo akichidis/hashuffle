@@ -162,6 +162,7 @@ object SetupBitcoinDrawFlow {
             IntStream.range(0, participantsWithTokens.size).boxed()
                     .forEach { i -> participants.add(BitcoinDrawState.Participant(participantsWithTokens[i].first, i)) }
 
+
             // create the draw state
             val bitcoinDrawState = BitcoinDrawState(currentBitcoinBlock, drawBlockHeight, blocksForVerification, participants)
 
@@ -180,13 +181,15 @@ object SetupBitcoinDrawFlow {
             participantsWithTokens.forEach { p -> txBuilder.addInputState(p.second.first()) }
 
             // Create the "prize" HashuffleToken and add it to the transaction
-            val prizeToken = HashuffleTokenState(participants.size * participationFee, null)
-            txBuilder.addOutputState(prizeToken, HashuffleTokenContract.CONTRACT_ID)
+            val prizeToken = HashuffleTokenState(participants.size * participationFee, participantsWithTokens.map { p -> p.first })
 
-            // Add the command which "sums" the tokens
+            // Create the command which "sums" the tokens
             val tokenCommand = Command(HashuffleTokenContract.Commands.Sum(), participantsWithTokens.map { p -> p.first.owningKey })
 
-            txBuilder.addCommand(tokenCommand)
+            // Add the prize token "encumbered" to the draw state - so nobody can spend this state
+            // without being the winner of the draw.
+            txBuilder.addOutputState(state = prizeToken, contract = HashuffleTokenContract.CONTRACT_ID, notary = notary, encumbrance = 0)
+                    .addCommand(tokenCommand)
 
             return Pair(txBuilder, bitcoinDrawState)
         }

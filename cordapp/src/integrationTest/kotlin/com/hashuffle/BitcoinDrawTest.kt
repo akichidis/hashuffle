@@ -142,6 +142,8 @@ class BitcoinDrawTest {
         partyAProxy.startFlow(IssueHashuffleTokenFlow::Issue, participationFee).returnValue.getOrThrow()
         partyBProxy.startFlow(IssueHashuffleTokenFlow::Issue, participationFee).returnValue.getOrThrow()
 
+        // Node C will not participate, since we haven't added tokens for them.
+
         // AND partyA setups a draw
         val pairResult = partyAProxy.startFlow(SetupBitcoinDrawFlow::Setup,
                 currentBitcoinBlock,

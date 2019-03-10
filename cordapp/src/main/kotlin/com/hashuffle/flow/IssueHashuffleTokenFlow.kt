@@ -46,7 +46,7 @@ object IssueHashuffleTokenFlow {
             // Stage 1. Create the token state
             progressTracker.currentStep = CREATE_STATE
 
-            val token = HashuffleTokenState(value, me)
+            val token = HashuffleTokenState(value, listOf(me))
 
             val txCommand = Command(HashuffleTokenContract.Commands.Issue(), me.owningKey)
             val txBuilder = TransactionBuilder(notary)

@@ -10,23 +10,18 @@ import net.corda.core.schemas.PersistentState
 import net.corda.core.schemas.QueryableState
 
 data class HashuffleTokenState(val value: Long,
-                               val owner: Party?,
+                               val owners: List<Party>,
                                override val linearId: UniqueIdentifier = UniqueIdentifier()) :
         LinearState, QueryableState {
 
-    override val participants: List<AbstractParty> get() {
-        if (owner != null) {
-            return listOf(owner)
-        }
-        return listOf()
-    }
+    override val participants: List<AbstractParty> get() = owners
 
     override fun generateMappedObject(schema: MappedSchema): PersistentState {
         return when (schema) {
             is HashuffleTokenSchemaV1 -> {
                 HashuffleTokenSchemaV1.HashuffleToken(
                         this.value,
-                        this.owner,
+                        this.owners.map { o -> HashuffleTokenSchemaV1.Owner(party = o) }.toMutableList(),
                         this.linearId.id
                 )
             }
