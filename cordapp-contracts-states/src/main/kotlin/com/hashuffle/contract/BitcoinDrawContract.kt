@@ -85,10 +85,12 @@ open class BitcoinDrawContract : Contract {
      * by hashRounds.
      */
     private fun sha256(str: String, hashRounds: Int): String {
+        val logger = loggerFor<BitcoinDrawContract>()
         var finalHash = str
 
         for (i in 0..hashRounds) {
             finalHash = SecureHash.sha256(finalHash).toString()
+            logger.info("Round " + (i+1) + " hash: " + finalHash)
         }
 
         return finalHash
