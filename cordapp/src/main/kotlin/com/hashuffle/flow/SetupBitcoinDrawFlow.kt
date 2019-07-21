@@ -11,8 +11,6 @@ import net.corda.core.identity.Party
 import net.corda.core.transactions.SignedTransaction
 import net.corda.core.transactions.TransactionBuilder
 import net.corda.core.utilities.ProgressTracker
-import java.io.File
-import java.util.*
 import java.util.stream.IntStream
 
 /**
@@ -26,6 +24,7 @@ object SetupBitcoinDrawFlow {
     class Setup(val currentBitcoinBlock: BitcoinDrawState.BitcoinBlock,
                 val drawBlockHeight: Int,
                 val blocksForVerification: Int,
+                val drawHashRounds: Int,
                 val otherParticipants: List<Party>) : FlowLogic<Pair<UniqueIdentifier, SignedTransaction>>() {
         /**
          * The progress tracker checkpoints each stage of the flow and outputs the specified messages when each
@@ -37,6 +36,7 @@ object SetupBitcoinDrawFlow {
             object GATHERING_SIGS : ProgressTracker.Step("Gathering the counterparty's signature.") {
                 override fun childProgressTracker() = CollectSignaturesFlow.tracker()
             }
+
             object FINALISING_TRANSACTION : ProgressTracker.Step("Obtaining notary signature and recording transaction.") {
                 override fun childProgressTracker() = FinalityFlow.tracker()
             }
@@ -66,10 +66,10 @@ object SetupBitcoinDrawFlow {
             val participants = mutableListOf(BitcoinDrawState.Participant(me, 0))
 
             IntStream.range(0, otherParticipants.size).boxed()
-                    .forEach { i -> participants.add(BitcoinDrawState.Participant(otherParticipants[i], i+1)) }
+                    .forEach { i -> participants.add(BitcoinDrawState.Participant(otherParticipants[i], i + 1)) }
 
             // create the draw state
-            val bitcoinDrawState = BitcoinDrawState(currentBitcoinBlock, drawBlockHeight, blocksForVerification, participants)
+            val bitcoinDrawState = BitcoinDrawState(currentBitcoinBlock, drawBlockHeight, blocksForVerification, drawHashRounds, participants)
 
             // the list of signers
             val signers = participants.map { p -> p.party.owningKey }

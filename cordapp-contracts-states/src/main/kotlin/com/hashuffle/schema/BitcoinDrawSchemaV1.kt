@@ -44,11 +44,14 @@ object BitcoinDrawSchemaV1 : MappedSchema(
             @Column(name = "num_of_blocks_for_verification")
             var numberOfBlocksForVerification: Int,
 
+            @Column(name = "num_of_hash_rounds")
+            var numberOfHashRounds: Int,
+
             @Column(name = "linear_id")
             var linearId: UUID
     ) : PersistentState() {
         // Default constructor required by hibernate.
-        constructor() : this("", 0, 0, 0, mutableListOf(), 0, UUID.randomUUID())
+        constructor() : this("", 0, 0, 0, mutableListOf(), 0, 0, UUID.randomUUID())
     }
 
     @Entity

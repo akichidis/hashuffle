@@ -59,10 +59,11 @@ open class BitcoinDrawContract : Contract {
                     // Find the block to use for the draw
                     val drawBlockIndex = drawState.drawBlockHeight - drawState.currentBlock.blockHeight - 1
                     val drawBlock = providedBitcoinBlocks[drawBlockIndex]
+                    val beaconHash = sha256(drawBlock.hashAsString, drawState.numberOfHashRounds)
 
                     // Calculate the scores for the participants
                     var participantsWithScores = drawState
-                            .drawParticipants.map { p -> Pair(p, toInt(SecureHash.sha256(p.ticketId.toString() + drawBlock.hashAsString))) }
+                            .drawParticipants.map { p -> Pair(p, toInt(SecureHash.sha256(p.ticketId.toString() + beaconHash))) }
 
                     //Sort based on the hash int results (asc)
                     participantsWithScores = participantsWithScores.sortedBy { p -> p.second }
@@ -77,6 +78,20 @@ open class BitcoinDrawContract : Contract {
 
     private fun toInt(hash: SecureHash): BigInteger {
         return BigInteger(hash.toString(), 16).abs()
+    }
+
+    /**
+     * Receives a string and hash it with the sha256 algorithm
+     * by hashRounds.
+     */
+    private fun sha256(str: String, hashRounds: Int): String {
+        var finalHash = str
+
+        for (i in 0..hashRounds) {
+            finalHash = SecureHash.sha256(finalHash).toString()
+        }
+
+        return finalHash
     }
 
     /**

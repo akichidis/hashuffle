@@ -65,12 +65,14 @@ class BitcoinDrawTest {
 
         val drawBlockHeight = 564942
         val blocksForVerification = 6
+        val numOfHashRounds = 10
 
         // The partyA setups a draw
         val pairResult = partyAProxy.startFlow(SetupBitcoinDrawFlow::Setup,
                 currentBitcoinBlock,
                 drawBlockHeight,
                 blocksForVerification,
+                numOfHashRounds,
                 listOf(nodeB.nodeInfo.singleIdentity()))
                 .returnValue
                 .getOrThrow()
@@ -93,7 +95,7 @@ class BitcoinDrawTest {
     }
 
     @Test
-    fun `should successfully setup and perform a draw - only winner can spend the draw state` () = withDriver {
+    fun `should successfully setup and perform a draw - only winner can spend the draw state`() = withDriver {
         /*
             The setup is the following:
 
@@ -132,12 +134,14 @@ class BitcoinDrawTest {
 
         val drawBlockHeight = 564943 //hash id: 000000000000000000133629449fa3c77646df4694a5dd26a165a1719999f88b
         val blocksForVerification = 5
+        val numOfHashRounds = 10
 
         // AND partyA setups a draw
         val pairResult = partyAProxy.startFlow(SetupBitcoinDrawFlow::Setup,
                 currentBitcoinBlock,
                 drawBlockHeight,
                 blocksForVerification,
+                numOfHashRounds,
                 listOf(nodeB.nodeInfo.singleIdentity(), nodeC.nodeInfo.singleIdentity()))
                 .returnValue
                 .getOrThrow()
@@ -186,7 +190,7 @@ class BitcoinDrawTest {
         return bitcoinSerializer.deserialize(ByteBuffer.wrap(blockBytes)) as Block
     }
 
-    private fun loadBitcoinBlocks(fromBitcoinBlock : Int, toBitcoinBlock: Int): List<ByteArray> {
+    private fun loadBitcoinBlocks(fromBitcoinBlock: Int, toBitcoinBlock: Int): List<ByteArray> {
         return IntStream
                 .rangeClosed(fromBitcoinBlock, toBitcoinBlock)
                 .boxed()

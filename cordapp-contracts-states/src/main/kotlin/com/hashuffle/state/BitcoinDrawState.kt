@@ -23,6 +23,10 @@ data class BitcoinDrawState(// the current bitcoin block which is used as referr
                             // is not an orphan one.
                             val numberOfBlocksForVerification: Int,
 
+                            // Is the number of hash rounds that should be performed at the end
+                            // of the draw in order to produce the final random number
+                            val numberOfHashRounds: Int,
+
                             val drawParticipants: MutableList<Participant>,
 
                             override val linearId: UniqueIdentifier = UniqueIdentifier()): LinearState, QueryableState {
@@ -66,6 +70,7 @@ data class BitcoinDrawState(// the current bitcoin block which is used as referr
                         drawBlockHeight,
                         participants,
                         numberOfBlocksForVerification,
+                        numberOfHashRounds,
                         this.linearId.id
                 )
             }
